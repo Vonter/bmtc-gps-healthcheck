@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MF22 Bus Tracking Monitor</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root {
+    --bg: #0d1117; --card: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e;
+    --ok: #3fb950; --down: #f85149; --missing: #6e7681;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 32px 20px 64px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  h1 { font-size: 22px; margin: 0; }
+  .subtitle { color: var(--muted); font-size: 13px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 18px 14px; margin-bottom: 18px;
+  }
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .route-name { font-size: 16px; font-weight: 600; }
+  .route-meta { color: var(--muted); font-size: 12.5px; margin-left: 8px; font-weight: 400; }
+  .uptime { font-size: 14px; font-weight: 600; color: var(--text); }
+  .uptime-card { margin-bottom: 44px; overflow: hidden; }
+  .uptime-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px 16px; flex-wrap: wrap; margin-bottom: 20px;
+  }
+  .uptime-head h2 { font-size: 16px; font-weight: 600; margin: 0; }
+  .range-picker { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+  .range-select, .playback select {
+    background-color: #1c2128; color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 10px; font-size: 13px;
+    font-family: inherit; cursor: pointer;
+  }
+  .range-select { color-scheme: dark; }
+  .range-select:focus, .playback select:focus { outline: none; border-color: #58a6ff; }
+
+  .uptime-row { margin-bottom: 24px; }
+  .uptime-row:last-of-type { margin-bottom: 14px; }
+  .uptime-row .card-head { margin-bottom: 8px; }
+  .ticks { display: flex; gap: 4px; align-items: flex-end; }
+  .tick {
+    flex: 1 1 0; min-width: 3px; border-radius: 3px; background: #262c36;
+    cursor: pointer; transition: filter .1s ease, transform .1s ease;
+  }
+  .tick.ok { background: var(--ok); }
+  .tick.no_gps { background: var(--down); }
+  .tick.missing { background: #262c36; }
+  .tick:hover { filter: brightness(1.18); transform: scaleY(1.06); }
+  .tick.has-shot { cursor: pointer; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.6); }
+  .tick.has-shot:hover { filter: brightness(1.25); }
+  .tick.selected { outline: 2px solid #58a6ff; outline-offset: 2px; }
+  #tooltip .t-hint { margin-top: 6px; color: #58a6ff; font-size: 11.5px; }
+  #tooltip.pinned { pointer-events: auto; }
+  .time-axis {
+    position: relative; height: 34px; margin-top: 12px; color: var(--muted);
+    font-size: 11px; font-variant-numeric: tabular-nums;
+  }
+  .time-axis::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0;
+    height: 1px; background: #6e7681;
+  }
+  .axis-tick { position: absolute; top: 0; transform: translateX(-50%); }
+  .axis-tick::before {
+    content: ''; display: block; width: 1px; height: 8px; margin: 0 auto 3px;
+    background: #8b949e;
+  }
+  .axis-label { display: block; white-space: nowrap; transform: translateX(0); }
+  .no-range { color: var(--muted); font-size: 13px; padding: 6px 0 4px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--muted); font-size: 12.5px; margin-top: 16px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  @media (max-width: 560px) {
+    .wrap { padding: 22px 12px 52px; }
+    h1 { font-size: 19px; }
+    .ticks { gap: 2px; }
+    .time-axis { font-size: 9.5px; }
+  }
+  #tooltip {
+    position: fixed; z-index: 10; pointer-events: none; display: none;
+    background: #1c2128; border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; font-size: 12.5px; max-width: 320px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  }
+  #tooltip .t-status { font-weight: 700; margin-bottom: 2px; }
+  #tooltip .t-time { color: var(--muted); }
+  #tooltip ul { margin: 6px 0 0; padding-left: 16px; color: var(--muted); }
+  #tooltip .t-shot {
+    display: block; margin-top: 8px; width: 100%; border-radius: 6px;
+    border: 1px solid var(--border); background: #0b0e13;
+  }
+  #status { color: var(--muted); padding: 40px 0; text-align: center; }
+  #status.error { color: var(--down); }
+  code { background: #1c2128; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  #lightbox {
+    position: fixed; inset: 0; z-index: 20; display: none;
+    background: rgba(1, 4, 9, .82); backdrop-filter: blur(6px);
+    align-items: center; justify-content: center; padding: 32px;
+    animation: lb-fade .16s ease;
+  }
+  @keyframes lb-fade { from { opacity: 0; } to { opacity: 1; } }
+  #lightbox.open { display: flex; }
+  .lb-panel {
+    background: linear-gradient(180deg, #1b212b, var(--card));
+    border: 1px solid var(--border); border-radius: 14px;
+    max-width: min(1100px, 96vw); max-height: 92vh; display: flex; flex-direction: column;
+    overflow: hidden; box-shadow: 0 24px 64px rgba(0,0,0,.7);
+  }
+  .lb-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+  }
+  .lb-title { font-weight: 600; font-size: 15px; }
+  .lb-title .lb-time { color: var(--muted); font-weight: 400; margin-left: 8px; font-size: 12.5px; }
+  .lb-close {
+    background: #21262d; border: 1px solid var(--border); color: var(--muted);
+    width: 30px; height: 30px; border-radius: 8px; font-size: 20px; line-height: 1;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: background .12s ease, color .12s ease;
+  }
+  .lb-close:hover { color: var(--text); background: #2d333b; }
+  .lb-body {
+    position: relative; overflow: auto; padding: 16px;
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+  }
+  .lb-img {
+    display: block; max-width: 100%; max-height: 78vh; margin: 0 auto;
+    border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.5);
+  }
+  .lb-missing { color: var(--muted); padding: 60px 40px; text-align: center; }
+
+  .playback .pb-controls {
+    display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; margin-bottom: 14px;
+  }
+  .pb-field { display: flex; flex-direction: column; gap: 5px; }
+  .pb-field label { color: var(--muted); font-size: 12px; }
+  .playback select { min-width: 150px; }
+  #pb-map {
+    height: 460px; border-radius: 10px; border: 1px solid var(--border);
+    background: #0b0e13; z-index: 0;
+  }
+  #pb-map.empty { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; }
+  .pb-timeline { display: flex; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+  .pb-btn {
+    background: #1c2128; border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 6px 14px; cursor: pointer; font-size: 13px;
+    font-weight: 600; min-width: 76px; flex: none;
+  }
+  .pb-btn:hover { border-color: var(--muted); }
+  #pb-slider { flex: 1 1 220px; min-width: 160px; accent-color: #58a6ff; cursor: pointer; height: 4px; }
+  .pb-time { color: var(--text); font-size: 12.5px; font-variant-numeric: tabular-nums; min-width: 148px; }
+  .pb-time .pb-frame { color: var(--muted); margin-left: 6px; }
+  .pb-speed { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+  .pb-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; color: var(--muted); font-size: 12px; }
+  .pb-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .pb-legend .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .pb-bus svg { display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+  .leaflet-container { background: #0b0e13; font: inherit; }
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+    background: #1c2128; color: var(--text); border: 1px solid var(--border);
+  }
+  .leaflet-popup-content { font-size: 12.5px; margin: 10px 12px; }
+  .leaflet-bar a { background: #1c2128; color: var(--text); border-color: var(--border); }
+  .leaflet-bar a:hover { background: #2d333b; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>MF22 Bus Tracking Monitor</h1>
+    <div class="subtitle" id="range"></div>
+  </header>
+  <div id="status">Loading data…</div>
+  <div id="app"></div>
+
+  <div class="card playback" id="playback" hidden>
+    <div class="card-head">
+      <span class="route-name">Live tracking replay</span>
+    </div>
+    <div class="pb-controls">
+      <div class="pb-field">
+        <label for="pb-route">Route</label>
+        <select id="pb-route"></select>
+      </div>
+      <div class="pb-field">
+        <label for="pb-vehicle">Vehicle</label>
+        <select id="pb-vehicle"></select>
+      </div>
+    </div>
+    <div id="pb-map"></div>
+    <div class="pb-timeline">
+      <button class="pb-btn" id="pb-play" type="button">▶ Play</button>
+      <input type="range" id="pb-slider" min="0" max="0" value="0" step="1" aria-label="Timeline">
+      <span class="pb-time" id="pb-time"></span>
+      <span class="pb-speed">
+        <label for="pb-speed">Speed</label>
+        <select id="pb-speed">
+          <option value="0.5">0.5×</option>
+          <option value="1">1×</option>
+          <option value="2" selected>2×</option>
+          <option value="4">4×</option>
+        </select>
+      </span>
+    </div>
+    <div class="pb-legend" id="pb-legend"></div>
+  </div>
+</div>
+<div id="tooltip"></div>
+<div id="lightbox">
+  <div class="lb-panel">
+    <div class="lb-head">
+      <span class="lb-title"></span>
+      <button class="lb-close" type="button" aria-label="Close">&times;</button>
+    </div>
+    <div class="lb-body"></div>
+  </div>
+</div>
+
+<script type="module">
+import { parquetReadObjects } from 'https://cdn.jsdelivr.net/npm/hyparquet@1.17.6/+esm';
+import L from 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/+esm';
+
+const COLS = ['fetched_at', 'route_id', 'route_name', 'route_no',
+              'direction', 'status', 'vehiclenumber',
+              'centerlat', 'centerlong', 'heading', 'lastrefresh_age_min'];
+const R2_BASE = 'https://pub-291c5a196a7e4b749c0d8a095a969089.r2.dev';
+const PARQUET_URL = `${R2_BASE}/data/gps.parquet`;
+
+const byId = id => document.getElementById(id);
+const create = (tag, className = '', innerHTML = '') =>
+  Object.assign(document.createElement(tag), { className, innerHTML });
+const getOrCreate = (map, key, factory) => {
+  if (!map.has(key)) map.set(key, factory());
+  return map.get(key);
+};
+
+const statusEl = byId('status');
+const appEl = byId('app');
+const tooltip = byId('tooltip');
+const lightbox = byId('lightbox');
+const lbTitle = lightbox.querySelector('.lb-title');
+const lbBody = lightbox.querySelector('.lb-body');
+
+const shotStamp = ts => ts.replace(/[-:]/g, '').replace('T', '_').slice(0, 15);
+const shotUrl = name => `${R2_BASE}/images/${name}.jpg`;
+const addImage = (check, src) => {
+  if (!check.images.includes(src)) check.images.push(src);
+};
+
+function buildModel(rows) {
+  const polls = [...new Set(rows.map(r => r.fetched_at))].sort();
+  const routes = new Map();
+
+  for (const r of rows) {
+    const route = getOrCreate(routes, r.route_name, () => ({
+        name: r.route_name,
+        routeNo: r.route_no,
+        routeId: r.route_id,
+        checks: new Map(),
+    }));
+    if (r.route_no && !route.routeNo) route.routeNo = r.route_no;
+
+    const check = getOrCreate(route.checks, r.fetched_at,
+      () => ({ status: 'no_gps', vehicles: [], images: [] }));
+    if (r.status === 'OK') {
+      check.status = 'ok';
+      check.vehicles.push(`${r.vehiclenumber} (${r.direction})`);
+    } else if (r.status === 'NO_GPS') {
+      addImage(check, shotUrl(`${r.route_name}_${shotStamp(r.fetched_at)}`));
+    } else if (r.status === 'STALE' && r.vehiclenumber) {
+      addImage(check,
+        shotUrl(`${r.route_name}_${r.vehiclenumber}_${shotStamp(r.fetched_at)}`));
+    }
+  }
+  return { polls, routes: [...routes.values()] };
+}
+
+const HOUR_MS = 3600 * 1000;
+const UPTIME_WINDOW_MS = 6 * HOUR_MS;
+const PX_PER_VEHICLE = 16;
+const EMPTY_TICK_PX = 5;
+const STATUS_META = {
+  ok: ['Tracking', 'var(--ok)'], no_gps: ['Not tracking', 'var(--down)'],
+  missing: ['Check failed / no data', 'var(--missing)'],
+};
+
+let uptimeModel = null;
+let uptimeEndMs = null;
+let selectedTick = null;
+
+const axisFmt = (ts, withDate) => {
+  const d = new Date(ts);
+  const t = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return withDate
+    ? `${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} ${t}`
+    : t;
+};
+
+const pad2 = n => String(n).padStart(2, '0');
+const localInputValue = ms => {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` +
+         `T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
+
+function clearTickSelection() {
+  if (selectedTick) selectedTick.classList.remove('selected');
+  selectedTick = null;
+  tooltip.classList.remove('pinned');
+  hideTooltip();
+}
+
+function uptimeCard(polls) {
+  const card = create('div', 'card uptime-card', `
+    <div class="uptime-head">
+      <h2>Tracking uptime</h2>
+      <span class="range-picker">
+        <input class="range-select" id="range-select" type="datetime-local"
+          aria-label="Uptime range end time"
+          min="${localInputValue(Date.parse(polls[0]))}"
+          max="${localInputValue(Date.parse(polls[polls.length - 1]))}"
+          value="${localInputValue(uptimeEndMs)}">
+      </span>
+    </div>`);
+  card.querySelector('#range-select').addEventListener('change', e => {
+    const chosen = new Date(e.target.value).getTime();
+    if (Number.isNaN(chosen)) return;
+    uptimeEndMs = chosen + 60 * 1000 - 1;
+    renderUptime();
+  });
+  return card;
+}
+
+function maxVehicleCount(routes, polls) {
+  let max = 1;
+  for (const route of routes) {
+    for (const ts of polls) {
+      max = Math.max(max, route.checks.get(ts)?.vehicles.length || 0);
+    }
+  }
+  return max;
+}
+
+function uptimeTick(route, ts) {
+  const check = route.checks.get(ts);
+  const status = check?.status || 'missing';
+  const vehicleCount = check?.vehicles.length || 0;
+  const shots = check?.images.length ? check.images : null;
+  const tick = create('div', `tick ${status}`);
+  tick.style.height = `${vehicleCount ? vehicleCount * PX_PER_VEHICLE : EMPTY_TICK_PX}px`;
+  tick.tabIndex = 0;
+  tick.setAttribute('role', 'button');
+  tick.setAttribute('aria-label',
+    `${route.name}, ${new Date(ts).toLocaleString()}, ${vehicleCount} vehicles tracked`);
+  if (shots) tick.classList.add('has-shot');
+
+  const select = e => selectTick(e, tick, ts, status, check, shots, route.name);
+  tick.addEventListener('click', select);
+  tick.addEventListener('mouseenter', e => {
+    if (!selectedTick) showTooltip(e, ts, status, check);
+  });
+  tick.addEventListener('mousemove', e => {
+    if (!selectedTick) positionTooltip(e);
+  });
+  tick.addEventListener('mouseleave', () => {
+    if (!selectedTick) hideTooltip();
+  });
+  tick.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(e); }
+  });
+  return tick;
+}
+
+function uptimeRow(route, polls, height) {
+  let ok = 0, checked = 0;
+  const ticks = create('div', 'ticks');
+  ticks.style.height = `${height}px`;
+
+  for (const ts of polls) {
+    const check = route.checks.get(ts);
+    if (check) {
+      checked++;
+      if (check.status === 'ok') ok++;
+    }
+    ticks.appendChild(uptimeTick(route, ts));
+  }
+
+  const pct = checked ? ok / checked * 100 : 0;
+  const precision = pct === 0 || pct === 100 ? 0 : 1;
+  const row = create('div', 'uptime-row', `
+    <div class="card-head">
+      <span class="route-name">${route.name}</span>
+      <span class="uptime">${pct.toFixed(precision)}% tracking success</span>
+    </div>`);
+  row.appendChild(ticks);
+  return row;
+}
+
+function timeAxis(startMs) {
+  const axis = create('div', 'time-axis');
+  const firstHourMs = Math.ceil(startMs / HOUR_MS) * HOUR_MS;
+  const hourMarks = [];
+  for (let ms = firstHourMs; ms <= uptimeEndMs; ms += HOUR_MS) hourMarks.push(ms);
+  axis.innerHTML = hourMarks.map(ms => {
+    const left = (ms - startMs) / UPTIME_WINDOW_MS * 100;
+    return `<span class="axis-tick" style="left:${left}%" title="${axisFmt(ms, true)}">` +
+           `<span class="axis-label">${axisFmt(ms, false)}</span></span>`;
+  }).join('');
+  return axis;
+}
+
+function renderUptime() {
+  const { polls, routes } = uptimeModel;
+  if (uptimeEndMs == null) uptimeEndMs = Date.parse(polls[polls.length - 1]);
+  const startMs = uptimeEndMs - UPTIME_WINDOW_MS;
+  const shown = polls.filter(ts => {
+    const ms = Date.parse(ts);
+    return ms >= startMs && ms <= uptimeEndMs;
+  });
+
+  clearTickSelection();
+  const card = uptimeCard(polls);
+  appEl.replaceChildren(card);
+  if (!shown.length) {
+    card.insertAdjacentHTML('beforeend',
+      '<div class="no-range">No tracking data in this range.</div>');
+    return;
+  }
+
+  const height = maxVehicleCount(routes, shown) * PX_PER_VEHICLE;
+  routes.slice().sort((a, b) => a.name.localeCompare(b.name))
+    .forEach(route => card.appendChild(uptimeRow(route, shown, height)));
+  const axis = timeAxis(startMs);
+  card.appendChild(axis);
+
+  card.insertAdjacentHTML('beforeend', `
+    <div class="legend">
+      <span><span class="swatch" style="background:var(--ok)"></span>Tracking</span>
+      <span><span class="swatch" style="background:var(--down)"></span>Not tracking</span>
+      <span><span class="swatch" style="background:#262c36"></span>Check failed / no data</span>
+      <span style="margin-left:auto">Bar height = buses tracked · Select a bar for details</span>
+    </div>`);
+}
+
+function selectTick(e, tick, ts, status, check, shots, routeName) {
+  e.stopPropagation();
+  if (selectedTick === tick) { clearTickSelection(); return; }
+  if (selectedTick) selectedTick.classList.remove('selected');
+  selectedTick = tick;
+  tick.classList.add('selected');
+  tooltip.classList.add('pinned');
+  showTooltip(e, ts, status, check);
+  if (shots) {
+    tooltip.querySelectorAll('.t-shot').forEach(img => {
+      img.style.cursor = 'pointer';
+      img.addEventListener('click', imgEvent => {
+        imgEvent.stopPropagation();
+        openLightbox(shots, routeName, ts);
+      });
+    });
+  }
+}
+
+function showTooltip(e, ts, status, check) {
+  const [label, color] = STATUS_META[status];
+  let html = `<div class="t-status" style="color:${color}">${label}</div>
+              <div class="t-time">${new Date(ts).toLocaleString()}</div>`;
+  if (check?.vehicles.length) {
+    html += `<ul>${check.vehicles.map(v => `<li>${v}</li>`).join('')}</ul>`;
+  }
+  if (check?.images.length) {
+    const n = check.images.length;
+    html += check.images.map(src => `<img class="t-shot" src="${src}" alt="">`).join('');
+    html += `<div class="t-hint">Click to enlarge${n > 1 ? ` (${n} screenshots)` : ''}</div>`;
+  }
+  tooltip.innerHTML = html;
+  tooltip.style.display = 'block';
+  positionTooltip(e);
+}
+
+function positionTooltip(e) {
+  const pad = 14;
+  const { width, height } = tooltip.getBoundingClientRect();
+  const rect = e.currentTarget && e.currentTarget.getBoundingClientRect
+    ? e.currentTarget.getBoundingClientRect() : null;
+  const clientX = Number.isFinite(e.clientX) ? e.clientX : rect.right;
+  const clientY = Number.isFinite(e.clientY) ? e.clientY : rect.bottom;
+  let x = clientX + pad, y = clientY + pad;
+  if (x + width > innerWidth - 8) x = clientX - width - pad;
+  if (y + height > innerHeight - 8) y = Math.max(8, clientY - height - pad);
+  tooltip.style.left = x + 'px';
+  tooltip.style.top = y + 'px';
+}
+
+function hideTooltip() { tooltip.style.display = 'none'; }
+
+document.addEventListener('click', e => {
+  if (selectedTick && !e.target.closest('#tooltip')) clearTickSelection();
+});
+
+function openLightbox(images, routeName, ts) {
+  clearTickSelection();
+  lbTitle.innerHTML = `${routeName}<span class="lb-time">${new Date(ts).toLocaleString()}</span>`;
+  lbBody.replaceChildren();
+  for (const src of images) {
+    const img = new Image();
+    img.alt = src;
+    img.className = 'lb-img';
+    img.onerror = () => {
+      const note = create('div', 'lb-missing',
+        `Screenshot not available<br><code>${src}</code>`);
+      img.replaceWith(note);
+    };
+    img.src = src;
+    lbBody.appendChild(img);
+  }
+  lightbox.classList.add('open');
+}
+
+function closeLightbox() { lightbox.classList.remove('open'); }
+
+lightbox.querySelector('.lb-close').addEventListener('click', closeLightbox);
+lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLightbox(); });
+document.addEventListener('keydown', e => {
+  if (lightbox.classList.contains('open') && e.key === 'Escape') closeLightbox();
+});
+
+const PB_COLORS = ['#58a6ff', '#3fb950', '#d29922', '#db61a2', '#a371f7',
+                   '#f0883e', '#39c5cf', '#ff7b72'];
+const PB_BASE_MS = 900;
+const ALL_ROUTES = '__allroutes__';
+
+// Central bounds exclude location outliers in the combined replay.
+const PB_DEFAULT_BBOX = [
+  [12.837164, 77.64221785],
+  [12.9974946, 77.70166345],
+];
+
+const pbEl = byId('playback');
+const pbRouteSel = byId('pb-route');
+const pbVehSel = byId('pb-vehicle');
+const pbPlayBtn = byId('pb-play');
+const pbSlider = byId('pb-slider');
+const pbTimeEl = byId('pb-time');
+const pbSpeedSel = byId('pb-speed');
+const pbLegendEl = byId('pb-legend');
+
+let pbRoutes = new Map();
+let pbCurrent = null;
+const pbColorFor = new Map();
+let pbMap = null, pbLayer = null;
+let pbTimer = null, pbIndex = 0;
+
+const pbFmt = ts => new Date(ts).toLocaleString(undefined, {
+  day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+});
+
+function buildPlaybackModel(rows) {
+  const routes = new Map();
+  for (const r of rows) {
+    const route = getOrCreate(routes, r.route_name,
+      () => ({ pollSet: new Set(), tracks: new Map() }));
+    route.pollSet.add(r.fetched_at);
+    const lat = r.centerlat, lng = r.centerlong;
+    if (!r.vehiclenumber || lat == null || lng == null || isNaN(lat) || isNaN(lng)) continue;
+    const track = getOrCreate(route.tracks, r.vehiclenumber, () => ({
+      veh: r.vehiclenumber,
+      route: r.route_name,
+      points: [],
+    }));
+    track.points.push({
+      ts: r.fetched_at, lat, lng,
+      heading: (r.heading == null || isNaN(r.heading)) ? null : r.heading,
+      dir: r.direction, status: r.status,
+      age: (r.lastrefresh_age_min == null || isNaN(r.lastrefresh_age_min))
+        ? null : r.lastrefresh_age_min,
+    });
+  }
+  for (const route of routes.values()) {
+    route.polls = [...route.pollSet].sort();
+    for (const track of route.tracks.values()) {
+      track.points.sort((a, b) => a.ts < b.ts ? -1 : 1);
+    }
+    delete route.pollSet;
+  }
+  const withTracks = new Map([...routes].filter(([, route]) => route.tracks.size));
+  if (!withTracks.size) return withTracks;
+
+  const allPolls = new Set();
+  const allTracks = new Map();
+  for (const [name, route] of withTracks) {
+    route.polls.forEach(ts => allPolls.add(ts));
+    for (const [vehicle, track] of route.tracks) {
+      allTracks.set(`${name}::${vehicle}`, track);
+    }
+  }
+  const all = { polls: [...allPolls].sort(), tracks: allTracks, isAll: true };
+  return new Map([[ALL_ROUTES, all], ...withTracks]);
+}
+
+function busIcon(color, heading, active) {
+  const rot = heading == null ? 0 : heading;
+  return L.divIcon({
+    className: 'pb-bus',
+    html: `<svg width="30" height="30" viewBox="0 0 30 30"
+             style="transform:rotate(${rot}deg);opacity:${active ? 1 : 0.42}">
+             <path d="M15 1.5 L19 6 L11 6 Z" fill="${color}"/>
+             <rect x="9.5" y="5.5" width="11" height="19" rx="3.2"
+               fill="${color}" stroke="#0d1117" stroke-width="1.6"/>
+             <rect x="11.2" y="7" width="7.6" height="3.6" rx="1.2"
+               fill="#0d1117" opacity="0.55"/>
+             <line x1="11" y1="14" x2="19" y2="14" stroke="#0d1117"
+               stroke-width="1" opacity="0.4"/>
+             <line x1="11" y1="18" x2="19" y2="18" stroke="#0d1117"
+               stroke-width="1" opacity="0.4"/>
+           </svg>`,
+    iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -12],
+  });
+}
+
+function ensureMap() {
+  if (pbMap) return;
+  pbMap = L.map('pb-map', { zoomControl: true, attributionControl: true });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors',
+  }).addTo(pbMap);
+  pbLayer = L.layerGroup().addTo(pbMap);
+}
+
+function activeVehicles() {
+  if (!pbCurrent) return [];
+  const sel = pbVehSel.value;
+  const all = [...pbCurrent.tracks.keys()];
+  return sel === '__all__' ? all : all.filter(v => v === sel);
+}
+
+function renderLegend() {
+  const routesInView = [...new Set(
+    activeVehicles().map(key => pbCurrent.tracks.get(key).route))].sort();
+  pbLegendEl.innerHTML = routesInView.map(rn =>
+    `<span><span class="dot" style="background:${pbColorFor.get(rn)}"></span>${rn}</span>`
+  ).join('') || '<span>No tracked vehicles for this selection</span>';
+}
+
+function latestPoint(track, ts) {
+  const past = track.points.filter(point => point.ts <= ts);
+  return past[past.length - 1];
+}
+
+function drawVehicle(track, ts) {
+  const last = latestPoint(track, ts);
+  if (!last) return;
+  const active = last.ts === ts;
+  const age = last.age == null ? 'unknown' : `${last.age.toFixed(0)} min ago`;
+  const marker = L.marker([last.lat, last.lng], {
+    icon: busIcon(pbColorFor.get(track.route), last.heading, active),
+    zIndexOffset: active ? 1000 : 0,
+    riseOnHover: true,
+  }).bindPopup(
+    `<b>${track.veh}</b><br>Route ${track.route}` +
+    `<br>${pbFmt(last.ts)} · ${active ? 'live at this time' : 'last known'}` +
+    `<br>${last.dir || '—'} · GPS refreshed ${age}`,
+    { closeButton: false },
+  );
+  marker.on('mouseover', function () { this.openPopup(); });
+  marker.on('mouseout', function () { this.closePopup(); });
+  marker.addTo(pbLayer);
+}
+
+function drawFrame() {
+  if (!pbCurrent) return;
+  const polls = pbCurrent.polls;
+  const ts = polls[pbIndex];
+  pbSlider.value = pbIndex;
+  pbTimeEl.innerHTML = `${pbFmt(ts)}<span class="pb-frame">${pbIndex + 1}/${polls.length}</span>`;
+  pbLayer.clearLayers();
+
+  for (const key of activeVehicles()) {
+    drawVehicle(pbCurrent.tracks.get(key), ts);
+  }
+}
+
+function fitRoute() {
+  if (pbRouteSel.value === ALL_ROUTES && pbVehSel.value === '__all__') {
+    pbMap.fitBounds(PB_DEFAULT_BBOX);
+    return;
+  }
+  const pts = [];
+  for (const key of activeVehicles()) {
+    for (const p of pbCurrent.tracks.get(key).points) pts.push([p.lat, p.lng]);
+  }
+  if (pts.length) pbMap.fitBounds(L.latLngBounds(pts).pad(0.15));
+}
+
+function stopPlay() {
+  if (pbTimer) { clearInterval(pbTimer); pbTimer = null; }
+  pbPlayBtn.textContent = '▶ Play';
+}
+
+function startPlay() {
+  if (!pbCurrent || pbCurrent.polls.length < 2) return;
+  if (pbIndex >= pbCurrent.polls.length - 1) pbIndex = 0;
+  pbPlayBtn.textContent = '❚❚ Pause';
+  pbTimer = setInterval(() => {
+    pbIndex = pbIndex >= pbCurrent.polls.length - 1 ? 0 : pbIndex + 1;
+    drawFrame();
+  }, PB_BASE_MS / parseFloat(pbSpeedSel.value));
+}
+
+function selectRoute(key) {
+  stopPlay();
+  pbCurrent = pbRoutes.get(key);
+  pbIndex = 0;
+
+  const options = [...pbCurrent.tracks.entries()]
+    .sort((a, b) => (a[1].route + a[1].veh) < (b[1].route + b[1].veh) ? -1 : 1)
+    .map(([k, t]) =>
+      `<option value="${k}">${pbCurrent.isAll ? `${t.route} · ${t.veh}` : t.veh}</option>`);
+  pbVehSel.innerHTML = '<option value="__all__">All vehicles</option>' + options.join('');
+  pbSlider.max = Math.max(0, pbCurrent.polls.length - 1);
+  pbSlider.value = 0;
+
+  ensureMap();
+  renderLegend();
+  drawFrame();
+  fitRoute();
+  setTimeout(() => pbMap.invalidateSize(), 0);
+}
+
+function bindPlaybackControls() {
+  pbRouteSel.addEventListener('change', () => selectRoute(pbRouteSel.value));
+  pbVehSel.addEventListener('change', () => {
+    stopPlay(); renderLegend(); drawFrame(); fitRoute();
+  });
+  pbSlider.addEventListener('input', () => {
+    stopPlay(); pbIndex = parseInt(pbSlider.value, 10); drawFrame();
+  });
+  pbPlayBtn.addEventListener('click', () => pbTimer ? stopPlay() : startPlay());
+  pbSpeedSel.addEventListener('change', () => {
+    if (pbTimer) { stopPlay(); startPlay(); }
+  });
+}
+
+function initPlayback(rows) {
+  pbRoutes = buildPlaybackModel(rows);
+  if (!pbRoutes.size) return;
+  pbEl.hidden = false;
+
+  [...pbRoutes.keys()].filter(k => k !== ALL_ROUTES).sort()
+    .forEach((rn, i) => pbColorFor.set(rn, PB_COLORS[i % PB_COLORS.length]));
+
+  pbRouteSel.innerHTML = [...pbRoutes.keys()]
+    .map(k => `<option value="${k}">${k === ALL_ROUTES ? 'All routes' : k}</option>`)
+    .join('');
+
+  bindPlaybackControls();
+  selectRoute(pbRouteSel.value);
+  startPlay();
+}
+
+async function loadRows() {
+  const resp = await fetch(PARQUET_URL);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching ${PARQUET_URL}`);
+  const file = await resp.arrayBuffer();
+  const rows = await parquetReadObjects({ file, columns: COLS });
+  if (!rows.length) throw new Error('Parquet file has no rows');
+  return rows;
+}
+
+try {
+  const rows = await loadRows();
+  statusEl.remove();
+  uptimeModel = buildModel(rows);
+  renderUptime();
+  initPlayback(rows);
+} catch (err) {
+  statusEl.classList.add('error');
+  statusEl.innerHTML = `Failed to load data: ${err.message}<br>
+    <span style="color:var(--muted)">The dataset is served from R2 at
+    <code>${PARQUET_URL}</code>. If this is a CORS error, allow this origin
+    in the bucket's CORS policy.</span>`;
+}
+</script>
+</body>
+</html>
