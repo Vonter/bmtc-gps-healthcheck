@@ -36,7 +36,12 @@
     gap: 10px 16px; flex-wrap: wrap; margin-bottom: 20px;
   }
   .uptime-head h2 { font-size: 16px; font-weight: 600; margin: 0; }
-  .range-picker { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+  .range-picker {
+    display: inline-flex; align-items: flex-end; justify-content: flex-end;
+    flex-wrap: wrap; gap: 8px; margin-left: auto;
+  }
+  .range-field { display: inline-flex; flex-direction: column; gap: 4px; }
+  .range-field > span { color: var(--muted); font-size: 11.5px; }
   .range-select, .playback select {
     background-color: #1c2128; color: var(--text); border: 1px solid var(--border);
     border-radius: 6px; padding: 6px 10px; font-size: 13px;
@@ -48,22 +53,59 @@
   .uptime-row { margin-bottom: 24px; }
   .uptime-row:last-of-type { margin-bottom: 14px; }
   .uptime-row .card-head { margin-bottom: 8px; }
-  .ticks { display: flex; gap: 4px; align-items: flex-end; }
+  .ticks {
+    position: relative; border-bottom: 1px solid rgba(110, 118, 129, .28);
+    background: linear-gradient(180deg, transparent 25%, rgba(110, 118, 129, .035));
+  }
+  .off-hours-range {
+    position: absolute; inset-block: 0; z-index: 0; overflow: hidden;
+    border-inline: 1px solid rgba(139, 148, 158, .2);
+    background:
+      repeating-linear-gradient(
+        -45deg,
+        rgba(110, 118, 129, .1) 0,
+        rgba(110, 118, 129, .1) 4px,
+        rgba(13, 17, 23, .08) 4px,
+        rgba(13, 17, 23, .08) 8px
+      ),
+      rgba(110, 118, 129, .06);
+  }
+  .off-hours-label {
+    position: absolute; inset: 6px 2px auto; color: #a1a9b3;
+    font-size: 9px; font-weight: 600; line-height: 1.2;
+    text-align: center; white-space: nowrap;
+  }
+  .off-hours-label .compact { display: none; }
+  .chart-guide {
+    position: absolute; inset-block: 0; z-index: 1; width: 1px; pointer-events: none;
+    background: rgba(110, 118, 129, .16);
+  }
+  .chart-guide.day-start { background: rgba(139, 148, 158, .34); }
   .tick {
-    flex: 1 1 0; min-width: 3px; border-radius: 3px; background: #262c36;
+    position: absolute; bottom: 0; z-index: 2; min-width: 1px;
+    border-radius: 2px 2px 1px 1px; background: #262c36;
+    box-shadow: inset -1px 0 rgba(13, 17, 23, .58);
+    transform-origin: bottom;
     cursor: pointer; transition: filter .1s ease, transform .1s ease;
+  }
+  .tick::after {
+    content: ''; position: absolute; inset: -3px 0;
   }
   .tick.ok { background: var(--ok); }
   .tick.no_gps { background: var(--down); }
   .tick.missing { background: #262c36; }
   .tick:hover { filter: brightness(1.18); transform: scaleY(1.06); }
-  .tick.has-shot { cursor: pointer; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.6); }
+  .tick.has-shot {
+    cursor: pointer;
+    box-shadow: inset -1px 0 rgba(13, 17, 23, .58),
+                inset 0 0 0 1.5px rgba(255,255,255,.6);
+  }
   .tick.has-shot:hover { filter: brightness(1.25); }
   .tick.selected { outline: 2px solid #58a6ff; outline-offset: 2px; }
   #tooltip .t-hint { margin-top: 6px; color: #58a6ff; font-size: 11.5px; }
   #tooltip.pinned { pointer-events: auto; }
   .time-axis {
-    position: relative; height: 34px; margin-top: 12px; color: var(--muted);
+    position: relative; height: 42px; margin-top: 10px; color: var(--muted);
     font-size: 11px; font-variant-numeric: tabular-nums;
   }
   .time-axis::before {
@@ -75,16 +117,36 @@
     content: ''; display: block; width: 1px; height: 8px; margin: 0 auto 3px;
     background: #8b949e;
   }
-  .axis-label { display: block; white-space: nowrap; transform: translateX(0); }
+  .axis-label {
+    display: flex; flex-direction: column; align-items: center;
+    line-height: 1.25; white-space: nowrap;
+  }
+  .axis-date { color: var(--text); font-size: 10px; font-weight: 600; }
+  .axis-time { color: var(--muted); }
+  .axis-tick.edge-start { transform: none; }
+  .axis-tick.edge-start::before { margin-left: 0; }
+  .axis-tick.edge-start .axis-label { align-items: flex-start; }
+  .axis-tick.edge-end { transform: translateX(-100%); }
+  .axis-tick.edge-end::before { margin-right: 0; }
+  .axis-tick.edge-end .axis-label { align-items: flex-end; }
   .no-range { color: var(--muted); font-size: 13px; padding: 6px 0 4px; }
   .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; color: var(--muted); font-size: 12.5px; margin-top: 16px; }
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .legend-note { flex-basis: 100%; }
   .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .off-hours-swatch {
+    border: 1px solid rgba(139, 148, 158, .28);
+    background: repeating-linear-gradient(
+      -45deg, #30363d 0, #30363d 3px, #161b22 3px, #161b22 6px);
+  }
   @media (max-width: 560px) {
     .wrap { padding: 22px 12px 52px; }
     h1 { font-size: 19px; }
-    .ticks { gap: 2px; }
+    .range-picker { justify-content: flex-start; margin-left: 0; width: 100%; }
     .time-axis { font-size: 9.5px; }
+    .time-axis.dense .axis-tick:nth-child(even) .axis-label { display: none; }
+    .off-hours-label .full { display: none; }
+    .off-hours-label .compact { display: inline; }
   }
   #tooltip {
     position: fixed; z-index: 10; pointer-events: none; display: none;
@@ -285,8 +347,14 @@ function buildModel(rows) {
   return { polls, routes: [...routes.values()] };
 }
 
-const HOUR_MS = 3600 * 1000;
-const UPTIME_WINDOW_MS = 6 * HOUR_MS;
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+const DEFAULT_UPTIME_WINDOW_MS = 6 * HOUR_MS;
+const SERVICE_START_MINUTE = 5 * 60;
+const SERVICE_END_MINUTE = 23 * 60;
+const SERVICE_TIME_ZONE = 'Asia/Kolkata';
+const SERVICE_TIME_ZONE_OFFSET_MS = 5.5 * HOUR_MS;
 const PX_PER_VEHICLE = 16;
 const EMPTY_TICK_PX = 5;
 const STATUS_META = {
@@ -296,21 +364,44 @@ const STATUS_META = {
 
 let uptimeModel = null;
 let uptimeEndMs = null;
+let uptimeWindowMs = DEFAULT_UPTIME_WINDOW_MS;
 let selectedTick = null;
+
+const zonedParts = ms => Object.fromEntries(
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: SERVICE_TIME_ZONE,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(ms))
+    .filter(part => part.type !== 'literal')
+    .map(part => [part.type, part.value])
+);
+
+const dateKey = ms => {
+  const p = zonedParts(ms);
+  return `${p.year}-${p.month}-${p.day}`;
+};
+
+const minuteOfDay = ms => {
+  const p = zonedParts(ms);
+  return Number(p.hour) * 60 + Number(p.minute);
+};
+
+const isServiceTime = ms => {
+  const minute = minuteOfDay(ms);
+  return minute >= SERVICE_START_MINUTE && minute <= SERVICE_END_MINUTE;
+};
 
 const axisFmt = (ts, withDate) => {
   const d = new Date(ts);
-  const t = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const t = d.toLocaleTimeString(undefined, {
+    timeZone: SERVICE_TIME_ZONE, hour: '2-digit', minute: '2-digit',
+  });
   return withDate
-    ? `${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} ${t}`
+    ? `${d.toLocaleDateString(undefined, {
+        timeZone: SERVICE_TIME_ZONE, day: 'numeric', month: 'short',
+      })} ${t} IST`
     : t;
-};
-
-const pad2 = n => String(n).padStart(2, '0');
-const localInputValue = ms => {
-  const d = new Date(ms);
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` +
-         `T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 };
 
 function clearTickSelection() {
@@ -321,21 +412,62 @@ function clearTickSelection() {
 }
 
 function uptimeCard(polls) {
+  const relevant = polls.map(Date.parse).filter(isServiceTime);
+  const selectedDate = dateKey(uptimeEndMs);
+  const pollsOnDate = relevant.filter(ms => dateKey(ms) === selectedDate);
+  const timeOptions = pollsOnDate.map(ms =>
+    `<option value="${ms}"${ms === uptimeEndMs ? ' selected' : ''}>` +
+    `${new Date(ms).toLocaleTimeString(undefined, {
+      timeZone: SERVICE_TIME_ZONE, hour: '2-digit', minute: '2-digit',
+    })}</option>`
+  ).join('');
+
   const card = create('div', 'card uptime-card', `
     <div class="uptime-head">
       <h2>Tracking uptime</h2>
       <span class="range-picker">
-        <input class="range-select" id="range-select" type="datetime-local"
-          aria-label="Uptime range end time"
-          min="${localInputValue(Date.parse(polls[0]))}"
-          max="${localInputValue(Date.parse(polls[polls.length - 1]))}"
-          value="${localInputValue(uptimeEndMs)}">
+        <label class="range-field">
+          <span>Time Range</span>
+          <select class="range-select" id="window-select">
+            <option value="${6 * HOUR_MS}"${uptimeWindowMs === 6 * HOUR_MS ? ' selected' : ''}>Past 6 hours</option>
+            <option value="${12 * HOUR_MS}"${uptimeWindowMs === 12 * HOUR_MS ? ' selected' : ''}>Past 12 hours</option>
+            <option value="${24 * HOUR_MS}"${uptimeWindowMs === 24 * HOUR_MS ? ' selected' : ''}>Past 24 hours</option>
+            <option value="${48 * HOUR_MS}"${uptimeWindowMs === 48 * HOUR_MS ? ' selected' : ''}>Past 2 days</option>
+          </select>
+        </label>
+        <label class="range-field">
+          <span>Date</span>
+          <input class="range-select" id="range-end-date" type="date"
+            min="${dateKey(relevant[0])}"
+            max="${dateKey(relevant[relevant.length - 1])}"
+            value="${selectedDate}">
+        </label>
+        <label class="range-field">
+          <span>Time</span>
+          <select class="range-select" id="range-end-time">${timeOptions}</select>
+        </label>
       </span>
     </div>`);
-  card.querySelector('#range-select').addEventListener('change', e => {
-    const chosen = new Date(e.target.value).getTime();
-    if (Number.isNaN(chosen)) return;
-    uptimeEndMs = chosen + 60 * 1000 - 1;
+
+  card.querySelector('#window-select').addEventListener('change', e => {
+    uptimeWindowMs = Number(e.target.value);
+    renderUptime();
+  });
+  card.querySelector('#range-end-date').addEventListener('change', e => {
+    const candidates = relevant.filter(ms => dateKey(ms) === e.target.value);
+    if (!candidates.length) {
+      renderUptime();
+      return;
+    }
+    const targetMinute = minuteOfDay(uptimeEndMs);
+    uptimeEndMs = candidates.reduce((nearest, ms) =>
+      Math.abs(minuteOfDay(ms) - targetMinute) <
+      Math.abs(minuteOfDay(nearest) - targetMinute) ? ms : nearest
+    );
+    renderUptime();
+  });
+  card.querySelector('#range-end-time').addEventListener('change', e => {
+    uptimeEndMs = Number(e.target.value);
     renderUptime();
   });
   return card;
@@ -351,12 +483,14 @@ function maxVehicleCount(routes, polls) {
   return max;
 }
 
-function uptimeTick(route, ts) {
+function uptimeTick(route, ts, layout) {
   const check = route.checks.get(ts);
   const status = check?.status || 'missing';
   const vehicleCount = check?.vehicles.length || 0;
   const shots = check?.images.length ? check.images : null;
   const tick = create('div', `tick ${status}`);
+  tick.style.left = `${layout.left}%`;
+  tick.style.width = `max(1px, ${layout.width}%)`;
   tick.style.height = `${vehicleCount ? vehicleCount * PX_PER_VEHICLE : EMPTY_TICK_PX}px`;
   tick.tabIndex = 0;
   tick.setAttribute('role', 'button');
@@ -381,10 +515,34 @@ function uptimeTick(route, ts) {
   return tick;
 }
 
-function uptimeRow(route, polls, height) {
+function uptimeRow(
+  route, polls, height, startMs, tickLayout, axisMarks,
+  offHoursRanges, showOffHoursLabels
+) {
   let ok = 0, checked = 0;
   const ticks = create('div', 'ticks');
   ticks.style.height = `${height}px`;
+
+  for (const range of offHoursRanges) {
+    const offHours = create('span', 'off-hours-range');
+    offHours.style.left = `${range.left}%`;
+    offHours.style.width = `${range.width}%`;
+    offHours.title = 'Non-service hours: 11:00 PM–5:00 AM IST';
+    offHours.setAttribute('aria-hidden', 'true');
+    if (showOffHoursLabels && range.width >= 10) {
+      offHours.innerHTML = '<span class="off-hours-label">' +
+        '<span class="full">Non-service hours</span>' +
+        '<span class="compact">Off hrs</span></span>';
+    }
+    ticks.appendChild(offHours);
+  }
+
+  for (const ms of axisMarks) {
+    const guide = create('span',
+      `chart-guide${minuteOfDay(ms) === 0 ? ' day-start' : ''}`);
+    guide.style.left = `${(ms - startMs) / uptimeWindowMs * 100}%`;
+    ticks.appendChild(guide);
+  }
 
   for (const ts of polls) {
     const check = route.checks.get(ts);
@@ -392,7 +550,7 @@ function uptimeRow(route, polls, height) {
       checked++;
       if (check.status === 'ok') ok++;
     }
-    ticks.appendChild(uptimeTick(route, ts));
+    ticks.appendChild(uptimeTick(route, ts, tickLayout.get(ts)));
   }
 
   const pct = checked ? ok / checked * 100 : 0;
@@ -406,24 +564,114 @@ function uptimeRow(route, polls, height) {
   return row;
 }
 
-function timeAxis(startMs) {
-  const axis = create('div', 'time-axis');
-  const firstHourMs = Math.ceil(startMs / HOUR_MS) * HOUR_MS;
-  const hourMarks = [];
-  for (let ms = firstHourMs; ms <= uptimeEndMs; ms += HOUR_MS) hourMarks.push(ms);
-  axis.innerHTML = hourMarks.map(ms => {
-    const left = (ms - startMs) / UPTIME_WINDOW_MS * 100;
-    return `<span class="axis-tick" style="left:${left}%" title="${axisFmt(ms, true)}">` +
-           `<span class="axis-label">${axisFmt(ms, false)}</span></span>`;
+function axisStepMs() {
+  if (uptimeWindowMs <= 6 * HOUR_MS) return HOUR_MS;
+  if (uptimeWindowMs <= 12 * HOUR_MS) return 2 * HOUR_MS;
+  if (uptimeWindowMs <= 24 * HOUR_MS) return 4 * HOUR_MS;
+  return 6 * HOUR_MS;
+}
+
+function getAxisMarks(startMs) {
+  const stepMs = axisStepMs();
+  const firstMs = Math.ceil(
+    (startMs + SERVICE_TIME_ZONE_OFFSET_MS) / stepMs
+  ) * stepMs - SERVICE_TIME_ZONE_OFFSET_MS;
+  const marks = [];
+  for (let ms = firstMs; ms <= uptimeEndMs; ms += stepMs) marks.push(ms);
+  return marks;
+}
+
+function getTickLayout(polls, startMs, typicalIntervalMs) {
+  const times = polls.map(Date.parse);
+  const maxInterpolatedGapMs = typicalIntervalMs * 1.75;
+  const layout = new Map();
+
+  polls.forEach((ts, index) => {
+    const currentMs = times[index];
+    const previousMs = times[index - 1];
+    const nextMs = times[index + 1];
+    const previousGapMs = previousMs == null ? Infinity : currentMs - previousMs;
+    const nextGapMs = nextMs == null ? Infinity : nextMs - currentMs;
+
+    // Neighboring observations share their midpoint. This fills normal polling
+    // intervals while preserving genuine data gaps and the overnight break.
+    const leftMs = previousGapMs <= maxInterpolatedGapMs
+      ? (previousMs + currentMs) / 2
+      : currentMs - typicalIntervalMs / 2;
+    const rightMs = nextGapMs <= maxInterpolatedGapMs
+      ? (currentMs + nextMs) / 2
+      : currentMs + typicalIntervalMs / 2;
+    const clippedLeftMs = Math.max(startMs, leftMs);
+    const clippedRightMs = Math.min(uptimeEndMs, rightMs);
+    layout.set(ts, {
+      left: (clippedLeftMs - startMs) / uptimeWindowMs * 100,
+      width: Math.max(0, clippedRightMs - clippedLeftMs) /
+        uptimeWindowMs * 100,
+    });
+  });
+  return layout;
+}
+
+function getOffHoursRanges(startMs) {
+  const firstLocalDayMs = Math.floor(
+    (startMs + SERVICE_TIME_ZONE_OFFSET_MS) / DAY_MS
+  ) * DAY_MS - SERVICE_TIME_ZONE_OFFSET_MS;
+  const ranges = [];
+
+  for (
+    let dayMs = firstLocalDayMs - DAY_MS;
+    dayMs <= uptimeEndMs;
+    dayMs += DAY_MS
+  ) {
+    const offStartMs = dayMs + SERVICE_END_MINUTE * MINUTE_MS;
+    const offEndMs = dayMs + DAY_MS + SERVICE_START_MINUTE * MINUTE_MS;
+    const clippedStartMs = Math.max(startMs, offStartMs);
+    const clippedEndMs = Math.min(uptimeEndMs, offEndMs);
+    if (clippedStartMs >= clippedEndMs) continue;
+    ranges.push({
+      left: (clippedStartMs - startMs) / uptimeWindowMs * 100,
+      width: (clippedEndMs - clippedStartMs) / uptimeWindowMs * 100,
+    });
+  }
+  return ranges;
+}
+
+function timeAxis(startMs, marks) {
+  const axis = create('div',
+    `time-axis${uptimeWindowMs >= 48 * HOUR_MS ? ' dense' : ''}`);
+  axis.innerHTML = marks.map((ms, index) => {
+    const left = (ms - startMs) / uptimeWindowMs * 100;
+    const showDate = uptimeWindowMs >= 24 * HOUR_MS &&
+      (index === 0 || dateKey(ms) !== dateKey(marks[index - 1]));
+    const edgeClass = left < 3 ? ' edge-start' : left > 97 ? ' edge-end' : '';
+    const date = showDate
+      ? `<span class="axis-date">${new Date(ms).toLocaleDateString(undefined, {
+          timeZone: SERVICE_TIME_ZONE, day: 'numeric', month: 'short',
+        })}</span>` : '';
+    const time = new Date(ms).toLocaleTimeString(undefined, {
+      timeZone: SERVICE_TIME_ZONE, hour: '2-digit', minute: '2-digit',
+      hourCycle: 'h23',
+    });
+    return `<span class="axis-tick${edgeClass}" style="left:${left}%" ` +
+           `title="${axisFmt(ms, true)}"><span class="axis-label">${date}` +
+           `<span class="axis-time">${time}</span></span></span>`;
   }).join('');
   return axis;
 }
 
 function renderUptime() {
   const { polls, routes } = uptimeModel;
-  if (uptimeEndMs == null) uptimeEndMs = Date.parse(polls[polls.length - 1]);
-  const startMs = uptimeEndMs - UPTIME_WINDOW_MS;
-  const shown = polls.filter(ts => {
+  const relevantPolls = polls.filter(ts => isServiceTime(Date.parse(ts)));
+  if (!relevantPolls.length) {
+    appEl.replaceChildren(create('div', 'card uptime-card',
+      '<div class="no-range">No tracking data during service hours (5:00 AM–11:00 PM IST).</div>'));
+    return;
+  }
+  if (uptimeEndMs == null) {
+    uptimeEndMs = Date.parse(relevantPolls[relevantPolls.length - 1]);
+  }
+  const startMs = uptimeEndMs - uptimeWindowMs;
+  const shown = relevantPolls.filter(ts => {
     const ms = Date.parse(ts);
     return ms >= startMs && ms <= uptimeEndMs;
   });
@@ -438,9 +686,22 @@ function renderUptime() {
   }
 
   const height = maxVehicleCount(routes, shown) * PX_PER_VEHICLE;
+  const intervals = shown.slice(1).map((ts, i) =>
+    Date.parse(ts) - Date.parse(shown[i])
+  ).filter(ms => ms > 0).sort((a, b) => a - b);
+  const typicalIntervalMs = intervals.length
+    ? intervals[Math.floor(intervals.length / 2)] : 10 * MINUTE_MS;
+  const tickLayout = getTickLayout(shown, startMs, typicalIntervalMs);
+  const axisMarks = getAxisMarks(startMs);
+  const offHoursRanges = getOffHoursRanges(startMs);
   routes.slice().sort((a, b) => a.name.localeCompare(b.name))
-    .forEach(route => card.appendChild(uptimeRow(route, shown, height)));
-  const axis = timeAxis(startMs);
+    .forEach((route, index) =>
+      card.appendChild(
+        uptimeRow(
+          route, shown, height, startMs, tickLayout, axisMarks,
+          offHoursRanges, index === 0
+        )));
+  const axis = timeAxis(startMs, axisMarks);
   card.appendChild(axis);
 
   card.insertAdjacentHTML('beforeend', `
@@ -448,7 +709,8 @@ function renderUptime() {
       <span><span class="swatch" style="background:var(--ok)"></span>Tracking</span>
       <span><span class="swatch" style="background:var(--down)"></span>Not tracking</span>
       <span><span class="swatch" style="background:#262c36"></span>Check failed / no data</span>
-      <span style="margin-left:auto">Bar height = buses tracked · Select a bar for details</span>
+      <span><span class="swatch off-hours-swatch"></span>Non-service hours</span>
+      <span class="legend-note">Bar height = buses tracked · Select a bar for details</span>
     </div>`);
 }
 
